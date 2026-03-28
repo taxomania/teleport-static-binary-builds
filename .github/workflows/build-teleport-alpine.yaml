@@ -1,0 +1,49 @@
+---
+name: Build Teleport Alpine Binary
+
+on:
+  workflow_dispatch:
+    inputs:
+      teleport_tag:
+        description: Teleport release tag to build, for example v18.7.0
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      TELEPORT_RELEASE_TAG: teleport-${{ inputs.teleport_tag }}
+      TELEPORT_ASSET_NAME: teleport-${{ inputs.teleport_tag }}-linux-amd64-musl
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: stable
+
+      - name: Build static Teleport binary
+        run: ./scripts/build-teleport-binary.sh "${{ inputs.teleport_tag }}"
+
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.TELEPORT_RELEASE_TAG }}
+          name: ${{ env.TELEPORT_RELEASE_TAG }}
+          body: Statically linked Teleport binary for Alpine hosts.
+          files: |
+            dist/${{ env.TELEPORT_ASSET_NAME }}
+            dist/${{ env.TELEPORT_ASSET_NAME }}.sha256
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.TELEPORT_ASSET_NAME }}
+          path: dist/
+          if-no-files-found: error
