@@ -22,9 +22,11 @@ jobs:
       - name: Resolve Teleport tag
         id: resolve_tag
         uses: actions/github-script@v7
+        env:
+          TELEPORT_TAG_INPUT: ${{ inputs.teleport_tag || github.event.inputs.teleport_tag || '' }}
         with:
           script: |
-            const manualTag = core.getInput('teleport_tag')?.trim();
+            const manualTag = process.env.TELEPORT_TAG_INPUT?.trim();
             let teleportTag = manualTag;
 
             if (!teleportTag) {
