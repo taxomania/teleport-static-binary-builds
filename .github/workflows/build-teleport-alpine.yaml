@@ -5,9 +5,11 @@ on:
   workflow_dispatch:
     inputs:
       teleport_tag:
-        description: Teleport release tag to build, for example v18.7.0
-        required: true
+        description: Teleport release tag to build, for example v18.7.0. Leave empty to auto-select latest stable release.
+        required: false
         type: string
+  schedule:
+    - cron: "0 0 * * *"
 
 permissions:
   contents: write
@@ -15,35 +17,91 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    env:
-      TELEPORT_RELEASE_TAG: teleport-${{ inputs.teleport_tag }}
-      TELEPORT_ASSET_NAME: teleport-${{ inputs.teleport_tag }}-linux-amd64-musl
 
     steps:
+      - name: Resolve Teleport tag
+        id: resolve_tag
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const manualTag = core.getInput('teleport_tag')?.trim();
+            let teleportTag = manualTag;
+
+            if (!teleportTag) {
+              const { data: latestRelease } = await github.request('GET /repos/{owner}/{repo}/releases/latest', {
+                owner: 'gravitational',
+                repo: 'teleport',
+              });
+
+              teleportTag = latestRelease.tag_name;
+              core.info(`Latest stable upstream Teleport release: ${teleportTag}`);
+            } else {
+              core.info(`Using manually provided Teleport tag: ${teleportTag}`);
+            }
+
+            core.setOutput('teleport_tag', teleportTag);
+            core.setOutput('release_tag', `teleport-${teleportTag}`);
+            core.setOutput('asset_name', `teleport-${teleportTag}-linux-amd64-musl`);
+
+      - name: Check if release already exists in this repository
+        id: release_check
+        uses: actions/github-script@v7
+        env:
+          RELEASE_TAG: ${{ steps.resolve_tag.outputs.release_tag }}
+        with:
+          script: |
+            const tag = process.env.RELEASE_TAG;
+
+            try {
+              await github.request('GET /repos/{owner}/{repo}/releases/tags/{tag}', {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag,
+              });
+              core.info(`Release ${tag} already exists. Skipping build.`);
+              core.setOutput('should_build', 'false');
+            } catch (error) {
+              if (error.status === 404) {
+                core.info(`Release ${tag} does not exist yet. Proceeding with build.`);
+                core.setOutput('should_build', 'true');
+              } else {
+                throw error;
+              }
+            }
+
       - name: Check out repository
+        if: steps.release_check.outputs.should_build == 'true'
         uses: actions/checkout@v4
 
       - name: Set up Go
+        if: steps.release_check.outputs.should_build == 'true'
         uses: actions/setup-go@v6
         with:
           go-version: stable
 
       - name: Build static Teleport binary
-        run: ./scripts/build-teleport-binary.sh "${{ inputs.teleport_tag }}"
+        if: steps.release_check.outputs.should_build == 'true'
+        run: ./scripts/build-teleport-binary.sh "${{ steps.resolve_tag.outputs.teleport_tag }}"
 
       - name: Publish release assets
+        if: steps.release_check.outputs.should_build == 'true'
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ env.TELEPORT_RELEASE_TAG }}
-          name: ${{ env.TELEPORT_RELEASE_TAG }}
+          tag_name: ${{ steps.resolve_tag.outputs.release_tag }}
+          name: ${{ steps.resolve_tag.outputs.release_tag }}
           body: Statically linked Teleport binary for Alpine hosts.
           files: |
-            dist/${{ env.TELEPORT_ASSET_NAME }}
-            dist/${{ env.TELEPORT_ASSET_NAME }}.sha256
+            dist/${{ steps.resolve_tag.outputs.asset_name }}
+            dist/${{ steps.resolve_tag.outputs.asset_name }}.sha256
 
       - name: Upload build artifacts
+        if: steps.release_check.outputs.should_build == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ env.TELEPORT_ASSET_NAME }}
+          name: ${{ steps.resolve_tag.outputs.asset_name }}
           path: dist/
           if-no-files-found: error
+
+      - name: Skip summary
+        if: steps.release_check.outputs.should_build != 'true'
+        run: echo "Release already exists, nothing to do."
