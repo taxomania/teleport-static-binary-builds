@@ -11,20 +11,29 @@ Running the GitHub Actions workflow creates two release assets under a tag such 
 
 The asset naming matches the expectations in the Ansible `setup-teleport` role.
 
+## Automatic upstream release detection
+
+The workflow runs every 24 hours at midnight UTC and checks `gravitational/teleport` for the latest stable GitHub release.
+If this repository does not already have a matching `teleport-<tag>` release, it builds and publishes a new static binary automatically.
+
 ## Usage
 
-Trigger the workflow from GitHub Actions:
+You can still trigger the workflow manually from GitHub Actions:
 
 ```bash
 gh workflow run build-teleport-alpine.yaml -f teleport_tag=v18.7.0
 ```
 
+If you omit `teleport_tag` in the manual run, the workflow auto-selects the latest stable upstream Teleport release.
+
 The workflow:
 
-1. clones the upstream `gravitational/teleport` repository at the requested tag
-2. builds `build/teleport` with static linker flags
-3. uploads the binary and checksum as workflow artifacts
-4. publishes the same files as GitHub release assets
+1. resolves the requested tag (manual input or latest stable upstream release)
+2. checks whether this repository already has a corresponding release tag
+3. clones the upstream `gravitational/teleport` repository at the requested tag
+4. builds `build/teleport` with static linker flags
+5. uploads the binary and checksum as workflow artifacts
+6. publishes the same files as GitHub release assets
 
 ## Local build
 
