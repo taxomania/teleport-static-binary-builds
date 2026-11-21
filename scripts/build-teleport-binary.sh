@@ -23,9 +23,19 @@ rust_version="$(awk '$1 == "channel" && $2 == "=" { gsub(/"/, "", $3); print $3 
 rustup toolchain install "${rust_version}" --profile minimal
 rustup override set "${rust_version}"
 
-CGO_LDFLAGS_ALLOW='-l:librdp_client\.a' \
+# Build the Rust RDP client ourselves so we can strip embedded LLVM bitcode
+# (.llvmbc), which Go's cgo linker rejects as a disallowed LTO section.
+rust_target="x86_64-unknown-linux-gnu"
 CARGO_PROFILE_RELEASE_LTO=off \
 RUSTFLAGS='-C embed-bitcode=no' \
+cargo build -p rdp-client --release --locked --target="${rust_target}"
+for archive in target/"${rust_target}"/release/librdp_client.a \
+  target/"${rust_target}"/release/deps/librdp_client*.a; do
+  [ -f "${archive}" ] && objcopy --remove-section .llvmbc "${archive}"
+done
+
+RDPCLIENT_SKIP_CARGO=1 \
+CGO_LDFLAGS_ALLOW='-l:librdp_client\.a' \
 WEBASSETS_SKIP_BUILD=1 \
 BUILDFLAGS="-ldflags '-extldflags=-static' -trimpath" \
 make build/teleport
