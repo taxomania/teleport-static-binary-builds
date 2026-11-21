@@ -18,7 +18,10 @@ git clone https://github.com/gravitational/teleport.git \
   teleport
 
 cd teleport
-CGO_LDFLAGS_ALLOW='-l:librdp_client\.a' \
+
+# Skip the Rust-based Windows desktop (RDP) client and the web UI: this binary
+# is only meant to run as a node/agent behind an existing proxy.
+RDPCLIENT_SKIP_BUILD=1 \
 WEBASSETS_SKIP_BUILD=1 \
 BUILDFLAGS="-ldflags '-extldflags=-static' -trimpath" \
 make build/teleport
