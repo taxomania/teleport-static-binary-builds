@@ -51,7 +51,7 @@ jobs:
     steps:
       - name: Resolve Teleport tag
         id: resolve_tag
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           TELEPORT_TAG_INPUT: ${{ inputs.teleport_tag || github.event.inputs.teleport_tag || '' }}
         with:
@@ -77,7 +77,7 @@ jobs:
 
       - name: Check if release already exists in this repository
         id: release_check
-        uses: actions/github-script@v8
+        uses: actions/github-script@v9
         env:
           RELEASE_TAG: ${{ steps.resolve_tag.outputs.release_tag }}
         with:
@@ -109,11 +109,11 @@ jobs:
 
       - name: Check out repository
         if: steps.release_check.outputs.should_build == 'true'
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
 
       - name: Set up Go
         if: steps.release_check.outputs.should_build == 'true'
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: stable
           cache: false
@@ -135,7 +135,7 @@ jobs:
 
       - name: Upload build artifacts
         if: steps.release_check.outputs.should_build == 'true'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ steps.resolve_tag.outputs.asset_name }}
           path: dist/
