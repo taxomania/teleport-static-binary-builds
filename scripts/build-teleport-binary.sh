@@ -19,25 +19,9 @@ git clone https://github.com/gravitational/teleport.git \
 
 cd teleport
 
-rust_version="$(awk '$1 == "channel" && $2 == "=" { gsub(/"/, "", $3); print $3 }' rust-toolchain.toml)"
-rustup toolchain install "${rust_version}" --profile minimal
-rustup override set "${rust_version}"
-
-# Build the Rust RDP libraries ourselves so we can strip embedded LLVM LTO
-# sections (.llvmbc, .llvmcmd), which Go's cgo linker rejects. The same env is
-# exported for make so it sees the cargo outputs as up to date.
-rust_target="x86_64-unknown-linux-gnu"
-export CARGO_PROFILE_RELEASE_LTO=off
-export RUSTFLAGS='-C embed-bitcode=no'
-cargo build -p rdp-client -p rdp-decoder --release --locked --target="${rust_target}"
-for archive in target/"${rust_target}"/release/librdp_*.a \
-  target/"${rust_target}"/release/deps/librdp_*.a; do
-  [ -f "${archive}" ] || continue
-  objcopy --remove-section .llvmbc --remove-section .llvmcmd --remove-section .llvm.lto "${archive}"
-done
-
-RDPCLIENT_SKIP_CARGO=1 \
-CGO_LDFLAGS_ALLOW='-l:librdp_client\.a' \
+# Skip the Rust-based Windows desktop (RDP) client and the web UI: this binary
+# is only meant to run as a node/agent behind an existing proxy.
+RDPCLIENT_SKIP_BUILD=1 \
 WEBASSETS_SKIP_BUILD=1 \
 BUILDFLAGS="-ldflags '-extldflags=-static' -trimpath" \
 make build/teleport
