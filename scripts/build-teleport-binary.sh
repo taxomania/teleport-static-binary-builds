@@ -23,15 +23,17 @@ rust_version="$(awk '$1 == "channel" && $2 == "=" { gsub(/"/, "", $3); print $3 
 rustup toolchain install "${rust_version}" --profile minimal
 rustup override set "${rust_version}"
 
-# Build the Rust RDP client ourselves so we can strip embedded LLVM bitcode
-# (.llvmbc, .llvmcmd), which Go's cgo linker rejects as a disallowed LTO section.
+# Build the Rust RDP libraries ourselves so we can strip embedded LLVM LTO
+# sections (.llvmbc, .llvmcmd), which Go's cgo linker rejects. The same env is
+# exported for make so it sees the cargo outputs as up to date.
 rust_target="x86_64-unknown-linux-gnu"
-CARGO_PROFILE_RELEASE_LTO=off \
-RUSTFLAGS='-C embed-bitcode=no' \
-cargo build -p rdp-client --release --locked --target="${rust_target}"
-for archive in target/"${rust_target}"/release/librdp_client.a \
-  target/"${rust_target}"/release/deps/librdp_client*.a; do
-  [ -f "${archive}" ] && objcopy --remove-section .llvmbc --remove-section .llvmcmd --remove-section .llvm.lto "${archive}"
+export CARGO_PROFILE_RELEASE_LTO=off
+export RUSTFLAGS='-C embed-bitcode=no'
+cargo build -p rdp-client -p rdp-decoder --release --locked --target="${rust_target}"
+for archive in target/"${rust_target}"/release/librdp_*.a \
+  target/"${rust_target}"/release/deps/librdp_*.a; do
+  [ -f "${archive}" ] || continue
+  objcopy --remove-section .llvmbc --remove-section .llvmcmd --remove-section .llvm.lto "${archive}"
 done
 
 RDPCLIENT_SKIP_CARGO=1 \
