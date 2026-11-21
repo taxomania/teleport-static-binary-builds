@@ -18,6 +18,11 @@ git clone https://github.com/gravitational/teleport.git \
   teleport
 
 cd teleport
+
+rust_version="$(awk '$1 == "channel" && $2 == "=" { gsub(/"/, "", $3); print $3 }' rust-toolchain.toml)"
+rustup toolchain install "${rust_version}" --profile minimal
+rustup override set "${rust_version}"
+
 CGO_LDFLAGS_ALLOW='-l:librdp_client\.a' \
 CARGO_PROFILE_RELEASE_LTO=off \
 RUSTFLAGS='-C embed-bitcode=no' \
