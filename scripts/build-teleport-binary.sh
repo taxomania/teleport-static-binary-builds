@@ -19,6 +19,8 @@ git clone https://github.com/gravitational/teleport.git \
 
 cd teleport
 CGO_LDFLAGS_ALLOW='-l:librdp_client\.a' \
+CARGO_PROFILE_RELEASE_LTO=off \
+RUSTFLAGS='-C embed-bitcode=no' \
 WEBASSETS_SKIP_BUILD=1 \
 BUILDFLAGS="-ldflags '-extldflags=-static' -trimpath" \
 make build/teleport
